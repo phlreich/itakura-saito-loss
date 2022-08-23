@@ -130,3 +130,8 @@ dmypy.json
 
 #data
 data/
+results/
+
+#logs
+nohup.out
+nohup_old.out
