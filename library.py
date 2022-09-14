@@ -3,29 +3,30 @@ import torch.nn as nn
 import torchvision
 import torchvision.transforms as transforms
 
+import os
 
-def load_data():
+def load_data(batch_size=100):
     transform = transforms.Compose([
         transforms.Pad(4),
         transforms.RandomHorizontalFlip(),
         transforms.RandomCrop(32),
         transforms.ToTensor()])
 
-    train_dataset = torchvision.datasets.CIFAR10(root='./data/',
+    train_dataset = torchvision.datasets.CIFAR10(root='../../../data/',
                                                  train=True, 
                                                  transform=transform,
                                                  download=True)
 
-    test_dataset = torchvision.datasets.CIFAR10(root='./data/',
+    test_dataset = torchvision.datasets.CIFAR10(root='../../../data/',
                                                 train=False, 
                                                 transform=transforms.ToTensor())
 
-    train_loader = torch.utils.data.DataLoader(dataset=train_dataset,
-                                               batch_size=100, 
-                                               shuffle=True)
-    test_loader = torch.utils.data.DataLoader(dataset=test_dataset,
-                                              batch_size=100, 
-                                              shuffle=False)
+    train_loader = torch.utils.data.DataLoader(batch_size=batch_size, 
+                                            dataset=train_dataset, 
+                                            shuffle=True)
+    test_loader = torch.utils.data.DataLoader(batch_size=batch_size,
+                                            dataset=test_dataset,
+                                            shuffle=False)
     return train_loader, test_loader
 # 3x3 convolution
 def conv3x3(in_channels, out_channels, stride=1):
@@ -131,15 +132,15 @@ class ResNet(nn.Module):
                 images = images.to(device)
                 labels = labels.to(device)
                 outputs = self(images)
-                total += labels.size(0)
+                total += 1
                 preds = torch.softmax(outputs, dim=1)
                 conf, pred = torch.max(preds, 1)
 
-                b = torch.ceil(conf/(1/n_bins))
+                bin_number = torch.ceil(conf/(1/n_bins))
 
                 res = 0
                 for bin in range(n_bins):
-                    inds = b == bin
+                    inds = bin_number == bin
                     l = inds.sum()
                     if l > 0:
                         acc = (pred[inds] == labels[inds]).sum() / l
