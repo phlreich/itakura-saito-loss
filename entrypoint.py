@@ -17,7 +17,7 @@ if __name__ == "__main__":
 
 
     def objective(config):
-        train_loader, test_loader = load_data()
+        train_loader, test_loader = load_data(config["batch_size"])
         model = ResNet(ResidualBlock, config["architecture"])#.to(device)
         optimizer = config["optimizer"](model.parameters(), lr=config["lr"])
         criterion = config["criterion"]
@@ -38,7 +38,8 @@ if __name__ == "__main__":
         "lr": tune.grid_search([0.0001, 0.0005, 0.001]),
         "criterion": tune.grid_search([itakura_saito_loss_v01, nn.CrossEntropyLoss()]),
         "optimizer": tune.grid_search([torch.optim.SGD, torch.optim.Adam]),
-        "architecture": tune.grid_search([[2,2,2], [3,3,3], [4,4,4]]),
+        "architecture": tune.grid_search([[3,3,3], [4,4,4]]),
+        "batch_size": tune.grid_search([128, 256])
       }
     search_space2 = {
         "lr": tune.grid_search([0.0005, 0.0001]),
@@ -52,13 +53,13 @@ if __name__ == "__main__":
     #resources = {"cpu": 1, "gpu": 0} #TODO balance ressource utilization
     tuner = tune.Tuner(
         objective,
-        param_space=search_space2,
+        param_space=search_space1,
         run_config=air.RunConfig(
-            name="temp_experiment",
+            name="ece_experiment",
             local_dir="./results",
             log_to_file=True,
         ),
         tune_config=tune.TuneConfig(
-            scheduler=tune.schedulers.ASHAScheduler(metric="accuracy", mode="max", max_t=10, grace_period=10))
+            scheduler=tune.schedulers.ASHAScheduler(metric="accuracy", mode="max", max_t=32, grace_period=8))
     )
     tuner.fit()

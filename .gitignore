@@ -138,3 +138,6 @@ nohup_old.out
 
 #whiteboard
 whiteboard.ipynb
+
+#bash utility
+bash_utility.sh

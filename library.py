@@ -149,10 +149,7 @@ class ResNet(nn.Module):
                         
                 res = res/labels.size(0)
                 error += res
-            return (error / total).item()
-
-#model18 = ResNet(ResidualBlock, [2, 2, 2]).to(device)
-#model34 = ResNet(ResidualBlock, [3, 4, 6, 3]).to(device)
+            return float((error / total))
 
 
 def itakura_saito_loss_v01(pred, y, eps=1e-4):
