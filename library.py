@@ -5,19 +5,19 @@ import torchvision.transforms as transforms
 
 import os
 
-def load_data(batch_size=100):
+def load_data(batch_size=100, root='/home/preich/itakura-saito-loss/data/'):
     transform = transforms.Compose([
         transforms.Pad(4),
         transforms.RandomHorizontalFlip(),
         transforms.RandomCrop(32),
         transforms.ToTensor()])
 
-    train_dataset = torchvision.datasets.CIFAR10(root='../../../data/',
+    train_dataset = torchvision.datasets.CIFAR10(root=root,
                                                  train=True, 
                                                  transform=transform,
                                                  download=True)
 
-    test_dataset = torchvision.datasets.CIFAR10(root='../../../data/',
+    test_dataset = torchvision.datasets.CIFAR10(root=root,
                                                 train=False, 
                                                 transform=transforms.ToTensor())
 
@@ -30,11 +30,13 @@ def load_data(batch_size=100):
     return train_loader, test_loader
 
 
-def test(model, test_loader, device="cpu", ece=False, n_bins=15):
+def test(model, test_loader, device="cpu", ece=False, n_bins=10):
     model.eval()
     correct = 0
     error = 0
     total = 0
+    freqs = torch.zeros(n_bins).to(device)
+    totals = torch.zeros(n_bins).to(device)
     with torch.no_grad():
         for images, labels in test_loader:
             images = images.to(device)
@@ -54,9 +56,11 @@ def test(model, test_loader, device="cpu", ece=False, n_bins=15):
                         acc = (predicted[inds] == labels[inds]).sum() / l
                         avg_conf = confidences[inds].mean()
                         error += abs(avg_conf - acc)*l
+                        freqs[bin] += acc*l
+                        totals[bin] += l
                         
     if not ece: return (correct / total)
-    return (correct / total), float(error / total)
+    return (correct / total), float(error / total), (freqs/totals)
 
 def itakura_saito_loss_v01(pred, y, eps=1e-4):
     pred = torch.softmax(pred,dim=1)
