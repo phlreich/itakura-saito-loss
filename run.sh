@@ -1,1 +1,1 @@
-nohup /home/preich/miniconda3/envs/py310/bin/python tune.py > logs/"$(date '+%Y%m%d%H%M')" 2>&1 &
+nohup /home/preich/miniconda3/envs/py310/bin/python tune.py > logs/"$(date '+%Y%m%d%H%M').log" 2>&1 &

@@ -49,6 +49,7 @@ def test(model, test_loader, device="cpu", ece=False, n_bins=10):
 
             if ece:
                 bin_number = torch.ceil(confidences/(1/n_bins))
+                bin_number -= 1 # bin 1 is actually bin 0
                 for bin in range(n_bins):
                     inds = bin_number == bin
                     l = inds.sum()
@@ -60,16 +61,18 @@ def test(model, test_loader, device="cpu", ece=False, n_bins=10):
                         totals[bin] += l
                         
     if not ece: return (correct / total)
-    return (correct / total), float(error / total), (freqs/totals)
+    print(error, total)
+    return (correct / total), float(error / total), (freqs/totals) #acc, ece, values for reliability diagram where nan = no samples in bin
 
-def itakura_saito_loss_v01(pred, y, eps=1e-4):
-    pred = torch.softmax(pred,dim=1)
-    pred = pred + eps
-    logs = torch.log(pred)
+def itakura_saito_loss_v01(logits, labels, eps=1e-4):
+    """
+    logits: (batch_size, n_classes), labels: (batch_size)
+    """
+    predictions = torch.softmax(logits, dim=1) + eps
+    logs = torch.log(predictions)
     logsum = logs.sum(dim=1)
-    sec = 1/pred
-    res = logsum
-    res = res + sec.gather(1,y.view(-1,1))
+    sec = 1/predictions
+    res = logsum + sec.gather(1,labels.view(-1,1))
     return res.mean()
 
 
