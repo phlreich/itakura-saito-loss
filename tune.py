@@ -22,35 +22,39 @@ args, _ = parser.parse_known_args()
 
 device = torch.device("cuda")
 
+
 def train(model, optimizer, criterion, train_loader, device, eps=0.01):
     model.train()
-    flag = 0
+    sloss = 0 #records loss values for analysis
+    i = 0
     for batch_idx, (data, target) in enumerate(train_loader):
         data, target = data.to(device), target.to(device)
         optimizer.zero_grad()
         output = model(data)
-        if criterion.__repr__() == "CrossEntropyLoss()" or criterion.__repr__()[:32] == "<function itakura_saito_loss_v03":
+        #switch for epsilons
+        if criterion.__repr__() == "CrossEntropyLoss()" or criterion.__repr__()[:32] == "<function itakura_saito_loss_v03" or criterion.__repr__()[:32] == "<function itakura_saito_loss_v04":
             loss = criterion(output, target)
         else:
             loss = criterion(output, target, eps)
-        if not flag:
-            flag = loss
+        sloss += loss.item()
+        i += 1
         loss.backward()
         optimizer.step()
-    return flag
+    return sloss/i
 
 def objective(config):
 
     train_loader, test_loader = load_data(config["batch_size"])
     
     model = config["model"](num_classes=10).to(device)
-    optimizer = torch.optim.Adam(model.parameters(), lr=config["lr"])
+    optimizer = torch.optim.Adam(model.parameters(), lr=config["lr"],)
     criterion = config["criterion"]
-
+    l = float("nan")
     while True:
-        l = float("nan")
+        
         acc, ece, freqs = test(model, test_loader, device, ece=True, n_bins=10)
-        session.report({"accuracy": acc, "ece": ece, "example_loss": l, "freqs": freqs})
+        session.report(
+            {"accuracy": acc, "ece": ece, "loss": l, "freqs": freqs, "mixed-score": acc-ece})
         for x in range(1):
             if criterion.__repr__() == "CrossEntropyLoss()" or criterion.__repr__()[:32] == "<function itakura_saito_loss_v03":
                 l = train(model, optimizer, criterion, train_loader, device)
@@ -60,6 +64,9 @@ def objective(config):
 
 
 if __name__ == "__main__":
+
+    # most of the following search spaces were used with a faulty version of the code, so they could not be used
+
     search_space = {
         "lr": tune.grid_search([0.001, 0.0005, 0.0001, 0.00005, 0.00001]),
         "criterion": tune.grid_search([nn.CrossEntropyLoss(), itakura_saito_loss_v01]),
@@ -212,6 +219,7 @@ if __name__ == "__main__":
         "eps": tune.grid_search([0.00001, 0.000001, 0.0000001, 0.00000001]),
     }
 
+    # cross-entropy loss benchmark
     a5 = {
         "lr": tune.grid_search([0.05, 0.01, 0.005, 0.001, 0.0005, 0.0001]),
         "criterion": nn.CrossEntropyLoss(),
@@ -220,36 +228,134 @@ if __name__ == "__main__":
         "eps": 0,
     }
 
+    # attempt to find better-calibrated IS loss
+    a6 = {
+        "lr": tune.grid_search([0.005, 0.001]),
+        "criterion": itakura_saito_loss_v01,
+        "model": models.resnet34,
+        "batch_size": 250,
+        "eps": tune.grid_search([0.0001, 0.0002, 0.0003, 0.0004,]),
+    }
+    
+    # optuna search space
+    a7 = {
+        "lr": tune.uniform(0.0005, 0.005),
+        "criterion": itakura_saito_loss_v01,
+        "model": models.resnet34,
+        "batch_size": tune.choice([100, 250, 500]),
+        "eps": tune.uniform(0.0001, 0.2),
+    }
+
+    # optuna search space, maximizing the acc score for itakura-saito loss
+    a10 = {
+        "lr": tune.uniform(0.0005, 0.005),
+        "criterion": itakura_saito_loss_v01,
+        "model": models.resnet34,
+        "batch_size": tune.choice([100, 250, 500]),
+        "eps": tune.uniform(0.0001, 0.1),
+    }
+
+    # optuna search space, maximizing the acc score for cross-entropy loss
+    a11 = {
+        "lr": tune.uniform(0.0005, 0.005),
+        "criterion": nn.CrossEntropyLoss(),
+        "model": models.resnet34,
+        "batch_size": tune.choice([100, 250, 500]),
+        "eps": 0# tune.uniform(0.0001, 0.1),
+    }
+
+    # direct comparison grid search
+    a12 ={
+        "lr": tune.grid_search([0.0011, 0.0026]),
+        "criterion": tune.grid_search([itakura_saito_loss_v01, nn.CrossEntropyLoss()]),
+        "model": models.resnet34,
+        "batch_size": tune.grid_search([250, 500]),
+        "eps": 0.07658
+    }
+
+    # IS-loss max acc
+    a13 = {
+        "lr": tune.uniform(0.0005, 0.005),
+        "criterion": itakura_saito_loss_v01,
+        "model": models.resnet34,
+        "batch_size": tune.choice([100, 250, 500]),
+        "eps": tune.uniform(0.0001, 0.1),
+    }
+
+    # CE-loss max acc
+    a14 = {
+        "lr": tune.uniform(0.0005, 0.005),
+        "criterion": nn.CrossEntropyLoss(),
+        "model": models.resnet34,
+        "batch_size": tune.choice([100, 250, 500]),
+        "eps": 0# tune.uniform(0.0001, 0.1),
+    }
+
+    # direct comparison grid search
+    a15 ={
+        "lr": tune.grid_search([0.0012, 0.0011]),
+        "criterion": tune.grid_search([itakura_saito_loss_v01, nn.CrossEntropyLoss()]),
+        "model": models.resnet34,
+        "batch_size": 100,#tune.grid_search([250, 500]),
+        "eps": 0.0533
+    }
+
+    # IS-loss max acc for larger net
+    a16 = {
+        "lr": tune.uniform(0.0005, 0.005),
+        "criterion": itakura_saito_loss_v01,
+        "model": models.resnet152,
+        "batch_size": tune.choice([100, 250, 500]),
+        "eps": tune.uniform(0.0001, 0.1),
+    }
+
+    # CE-loss max acc for larger net
+    a17 = {
+        "lr": tune.uniform(0.0005, 0.005),
+        "criterion": nn.CrossEntropyLoss(),
+        "model": models.resnet152,
+        "batch_size": tune.choice([100, 250, 500]),
+        "eps": 0# tune.uniform(0.0001, 0.1),
+    }
+
+    a18 ={
+        "lr": tune.grid_search([0.0006, 0.0036]),
+        "criterion": tune.grid_search([itakura_saito_loss_v01, nn.CrossEntropyLoss()]),
+        "model": models.resnet152,
+        "batch_size": 100,#tune.grid_search([250, 500]),
+        "eps": 0.0967
+    }
+    #TODO run 11
+
     algo = OptunaSearch()
     algo = tune.search.ConcurrencyLimiter(algo, max_concurrent=8)
-    num_samples = 8 if args.smoke_test else 100
+    num_samples = 8 if args.smoke_test else 200
 
     tuner = tune.Tuner(
+        # 2 trials per gpu
         tune.with_resources(objective, {"gpu": 0.5}),
-        param_space=a4,
+        param_space=a18,
         run_config=air.RunConfig(
-            name="a4",
+            name="a18",
             local_dir="./results",
             log_to_file=True,
             sync_config=tune.SyncConfig(
                 syncer=None,
             ),
-            stop={"training_iteration": 2 if args.smoke_test else 100},
+            stop={"training_iteration": 2 if args.smoke_test else 300},
         ),
         tune_config=tune.TuneConfig(
-            metric="ece",
+            metric="loss",
             mode="min",
-            #search_alg=algo,
-            #num_samples=num_samples,
-            #scheduler=tune.schedulers.ASHAScheduler(
-            #    time_attr="training_iteration",
-            #    #metric="accuracy",
-            #    #mode="max",
-            #    max_t=150,
-            #    grace_period=12,
-            #    reduction_factor=2,
-            #    brackets=1,
-            #),
+            search_alg=algo,
+            num_samples=num_samples,
+            scheduler=tune.schedulers.ASHAScheduler(
+                time_attr="training_iteration",
+                max_t=150,
+                grace_period=10,
+                reduction_factor=2,
+                brackets=1,
+            ),
         )
     )
 

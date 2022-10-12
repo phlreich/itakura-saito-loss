@@ -61,7 +61,6 @@ def test(model, test_loader, device="cpu", ece=False, n_bins=10):
                         totals[bin] += l
                         
     if not ece: return (correct / total)
-    print(error, total)
     return (correct / total), float(error / total), (freqs/totals) #acc, ece, values for reliability diagram where nan = no samples in bin
 
 def itakura_saito_loss_v01(logits, labels, eps=1e-4):
@@ -97,4 +96,12 @@ def itakura_saito_loss_v03(pred, y):
     ys = pred.gather(1,y.view(-1,1))
     expys = torch.exp(ys).flatten()
     res = logsumexp / expys - n_classes * logsumexp + pred.sum(dim=1)
+    return res.mean()
+
+def itakura_saito_loss_v04(logits, y):
+    n_classes = logits.shape[1]
+    logsumexp = torch.logsumexp(logits, dim=1)
+    ys = logits.gather(1,y.view(-1,1))
+    res = torch.logsumexp(logits - ys, dim=1)
+    res = res - n_classes * logsumexp + logits.sum(dim=1)
     return res.mean()
